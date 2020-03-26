@@ -1,33 +1,5 @@
 """CPU functionality."""
-
-import sys
-
-LDI = 0b10000010
-PRN = 0b01000111
-PRA = 0b01001000
-HLT = 0b00000001
-ST = 0b10000100
-LD = 0b10000011
-ADD = 0b10100000
-SUB = 0b10100001
-MUL = 0b10100010
-DIV = 0b10100011
-MOD = 0b10100100
-DEC = 0b01100110
-INC = 0b01100101
-CMP = 0b10100111
-AND = 0b10101000
-OR = 0b10101010
-XOR = 0b10101011
-NOT = 0b01101001
-SHL = 0b10101100
-SHR = 0b10101101
-PUSH = 0b01000101
-POP = 0b01000110
-CALL = 0b01010000
-RET = 0b00010001
-EMP = 0b00000000
-
+import sys, inspect, re
 class CPU:
     """Main CPU class."""
 
@@ -35,18 +7,18 @@ class CPU:
         """Construct a new CPU."""
         self.ram = [0] * 256
         self.reg = [0] * 8
-        self.pc = self.reg[0]
+        self.pc = 0
         self.sp = 7
+        self.reg[self.sp] = 0xF4
+        self.halted = False
         self.instruction = {
-            LDI: lambda register, value: self.handle_LDI(register, value),
-            PRN: lambda value, _: print(self.reg[value]),
-            ADD: lambda reg_a, reg_b: self.alu('ADD', reg_a, reg_b),
-            MUL: lambda reg_a, reg_b: self.alu('MUL', reg_a, reg_b),
-            CMP: lambda reg_a, reg_b: self.alu('CMP', reg_a, reg_b)
+            0b00000001: self.HLT,
+            0b10000010: self.LDI,
+            0b01000111: self.PRN,
+            0b10100010: self.MUL,
+            0b01000101: self.PUSH,
+            0b01000110: self.POP
         }
-
-    def handle_LDI(self, register, value):
-            self.reg[register] = value
 
     def ram_read(self, MAR): #memory address register
         return self.ram[MAR]
@@ -78,51 +50,42 @@ class CPU:
                     address += 1
                 else:
                     continue
-        #     try:
-        #         self.ram_write(int(command, 2), address)
-        #         address += 1
-        #     except ValueError:
-        #         pass
-
-        #     for instruction in program:
-        #         self.ram[address] = instruction
-        #         address += 1
-        # file.close()
     
-    # def HLT(self, op1, op2):
-    #     return (0, False)
+    def HLT(self):
+        self.halted = True
+        self.pc += 1
     
-    # def LDI(self, op1, op2):
-    #     self.reg[op1] = op2
-    #     return (3, True)
+    def LDI(self):
+        self.reg[self.ram_read(self.pc+1)] = self.ram_read(self.pc+2)
+        self.pc += 3
 
-    # def PRN(self, op1, op2):
-    #     print(self.reg[op1])
-    #     return (2, True)
+    def PRN(self):
+        print(self.reg[self.ram_read(self.pc+1)])
+        self.pc += 2
     
-    # def MUL(self, op1, op2):
-    #     self.alu('MUL', op1, op2)
-    #     return (3, True)
+    def MUL(self):
+        reg_a = self.ram_read(self.pc+1)
+        reg_b = self.ram_read(self.pc+2)
+        self.alu('MUL', reg_a, reg_b)
+        self.pc += 3
+    
+    def PUSH(self, MDR=None):
+        self.reg[self.sp] -= 1
+        data = MDR if MDR else self.reg[self.ram[self.pc+1]]
+        self.ram_write(self.reg[self.sp], data)
+        self.pc += 2
 
-    def alu(self, op, reg_a, reg_b = None):
+    def POP(self):
+        self.reg[self.ram_read(self.pc+1)] = self.ram_read(self.reg[self.sp])
+        self.pc += 2
+        self.reg[self.sp] += 1
+
+    def alu(self, op, reg_a, reg_b):
         """ALU operations."""
-
-        def add(reg_a, reg_b):
+        if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
-        def mul(reg_a, reg_b):
+        elif op == "MUL":
             self.reg[reg_a] *= self.reg[reg_b]
-        
-        alu_math = {
-            'ADD': add,
-            'MUL': mul
-        }
-
-        if op in alu_math:
-            alu_math[op](reg_a, reg_b)
-        # if op == "ADD":
-        #     self.reg[reg_a] += self.reg[reg_b]
-        # elif op == "MUL":
-        #     self.reg[reg_a] *= self.reg[reg_b]
         #elif op == "SUB": etc
         else:
             raise Exception("Unsupported ALU operation")
@@ -149,22 +112,6 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        while True:
-            IT = self.ram[self.pc]
-            op1 = self.ram_read(self.pc + 1)
-            op2 = self.ram_read(self.pc + 2)
-
-            if IT == HLT:
-                return False
-            
-            if IT == EMP:
-                continue
-
-            if IT in self.instruction:
-                self.instruction[IT](op1, op2)
-                operand = IT >> 6
-                setp = (IT & 0b10000) >> 4
-
-                if not setp:
-                    self.pc += operand + 1
-
+        while not self.halted:
+            IR = self.ram_read(self.pc)
+            self.instruction[IR]()
