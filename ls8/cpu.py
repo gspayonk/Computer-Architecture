@@ -1,5 +1,15 @@
 """CPU functionality."""
 import sys, inspect, re
+
+alu_operations = {
+    'AND': 0b10101000,
+    'OR': 0b10101010,
+    'XOR': 0b10101011,
+    'NOT': 0b01101001,
+    'SHL': 0b10101100,
+    'SHR': 0b10101101,
+    'MOD': 0b10100100
+}
 class CPU:
     """Main CPU class."""
 
@@ -20,7 +30,11 @@ class CPU:
             0b01000101: self.PUSH,
             0b01000110: self.POP,
             0b01010000: self.CALL,
-            0b00010001: self.RET
+            0b00010001: self.RET,
+            0b10100111: self.CMP,
+            0b01010100: self.JMP,
+            0b01010101: self.JEQ,
+            0b01010110: self. JNE
         }
 
     def ram_read(self, MAR): #memory address register
@@ -94,13 +108,65 @@ class CPU:
     def RET(self):
         self.pc = self.ram_read(self.reg[self.sp])
         self.reg[self.sp] += 1
+    
+    def CMP(self):
+        reg_a = self.ram_read(self.pc+1)
+        reg_b = self.ram_read(self.pc+2)
+        value_1 = self.reg[reg_a]
+        value_2 = self.reg[reg_b]
+        if value_1 == value_2:
+            self.e = 1
+        else:
+            self.e = 0
+        self.pc += 3
+    
+    def JMP(self):
+        reg_a = self.ram_read(self.pc+1)
+        self.pc = self.reg[reg_a]
+
+    def JEQ(self):
+        reg_a = self.ram_read(self.pc+1)
+        if self.e == 1:
+            self.pc = self.reg[reg_a]
+        else:
+            self.pc += 2
+    
+    def JNE(self):
+        reg_a = self.ram_read(self.pc+1)
+        if self.e == 0:
+            self.pc = self.reg[reg_a]
+        else:
+            self.pc += 2
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
+
         elif op == "MUL":
             self.reg[reg_a] *= self.reg[reg_b]
+
+        elif op == alu_operations['AND']:
+            self.reg[reg_a] &= self.reg[reg_b]
+        
+        elif op == alu_operations['OR']:
+            self.reg[reg_a] |= self.reg[reg_b]
+
+        elif op == alu_operations['XOR']:
+            self.reg[reg_a] ^= self.reg[reg_b]
+
+        elif op == alu_operations['NOT']:
+            self.reg[reg_a] = ~self.reg[reg_a]
+
+        elif op == alu_operations['SHL']:
+            self.reg[reg_a] <<= self.reg[reg_b]
+
+        elif op == alu_operations['SHR']:
+            self.reg[reg_a] >>= self.reg[reg_b]
+
+        elif op == alu_operations['MOD']:
+            self.reg[reg_a] %= self.reg[reg_b]
+
         #elif op == "SUB": etc
         else:
             raise Exception("Unsupported ALU operation")
